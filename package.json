@@ -1,0 +1,55 @@
+{
+  "name": "dsh-agent-new-media-studio",
+  "version": "0.2.0",
+  "type": "module",
+  "description": "Agent New Media Studio —— 用数据经营、用 AI 放大、由你拍板的经营工作台。数据快照 + 证据链 + 决策审批 + 任务闭环，构建在 DSH Desktop 之上。",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "workbench",
+    "ai-native",
+    "one-person-company",
+    "经营看板"
+  ],
+  "license": "MIT",
+  "author": "zhifanluosheng",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhifanluosheng/dsh-ai-native-company.git"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "./dsh/index.js",
+  "exports": {
+    ".": "./dsh/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "files": [
+    "dsh",
+    "lib",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "build": "node scripts/build-client.mjs",
+    "check": "node scripts/build-client.mjs --check && node scripts/verify-package.mjs",
+    "test": "node --test --test-isolation=none tests/*.test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "dsh-desktop-workbenches"
+      ]
+    }
+  }
+}
