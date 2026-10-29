@@ -25,9 +25,17 @@ if (pkg.dsh?.client?.platform !== 'web') fail('dsh.client.platform 必须是 "we
 if (!Array.isArray(pkg.dsh?.client?.inject) || !pkg.dsh.client.inject.includes('dsh-desktop-workbenches')) {
   fail('dsh.client.inject 必须包含 dsh-desktop-workbenches')
 }
-if (!pkg.repository?.url) fail('缺少 repository，工作台身份需要它')
-if (pkg.repository?.url?.startsWith('git+https://github.com/')) {
-  fail('repository 必须与工作台身份一致，否则市场卡片、侧栏和会话归属会对不上（详见 README 的「身份」说明）')
+// 工作台身份必须能在 package.json、cordis.patch.yml 的包名和客户端 module id 三处对上，
+// 否则 Desktop 会把 provider 判为「来源未确认」而不暴露面板。
+const IDENTITY_REPO = 'zhifanluosheng/dsh-ai-native-company'
+
+const repoUrl = pkg.repository?.url || ''
+const repoMatch = repoUrl.match(/^git\+https:\/\/github\.com\/([^/]+)\/([^/.]+?)(?:\.git)?$/i)
+if (!repoMatch) {
+  fail(`repository 必须是 git+https://github.com/<owner>/<repo>.git，当前是 ${repoUrl || '（缺失）'}`)
+} else {
+  const identity = `${repoMatch[1]}/${repoMatch[2]}`.toLowerCase()
+  if (identity !== IDENTITY_REPO) fail(`repository 身份是 ${identity}，但包内注册身份是 ${IDENTITY_REPO}`)
 }
 if (!pkg.exports?.['./client']) fail('缺少 exports["./client"]')
 
@@ -45,7 +53,12 @@ if (/insert:[\s\S]*?path:/.test(patch)) fail('patch 里不应写相对路径，n
 const client = await read('lib/client.js')
 if (!client.includes(`id: '${pkg.name}'`)) fail('lib/client.js 的模块 id 必须与包名一致')
 if (!client.includes('window.__ModuleLoader__.load(')) fail('lib/client.js 缺少模块加载器注册')
-if (client.includes('https://github.com/<')) fail('客户端 repository 不能是占位符')
+const registered = client.match(/REPOSITORY = '(https:\/\/github\.com\/([^/]+)\/([^']+))'/)
+if (!registered) {
+  fail('客户端缺少 REPOSITORY 常量')
+} else if (`${registered[2]}/${registered[3]}`.toLowerCase() !== IDENTITY_REPO) {
+  fail(`客户端 repository 是 ${registered[1]}，与 ${IDENTITY_REPO} 不一致：Desktop 会拒绝暴露 provider`)
+}
 
 const source = await read('src/client.js')
 if (source !== client.replace(/^\/\*[^\n]*\*\/\n/, '')) fail('lib/client.js 不是 src/client.js 的最新构建，请运行 npm run build')

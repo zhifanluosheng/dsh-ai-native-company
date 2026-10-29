@@ -37,11 +37,13 @@ Desktop 版本：`D:\Program Files\dsh-desktop\DSH Desktop\DSH Desktop.exe` · E
 
 - `GET /api/agent-new-media-studio/health` → `200 {"ok":true,"db":"ready"}`
 - `GET /api/agent-new-media-studio/bootstrap` → 6 个模块、6 个数据源、审计链 `ok: true`
-- 首屏报错（v0.1.0 缺陷，已修）：`dsh-agent-new-media-studio: pending (waiting for service: desktopWorkbenches)`。
-  原因：`dsh.client.inject` 只是加载顺序声明，不是 Cordis 服务注入；纯 Web 形态没有 Desktop 的
-  `desktopWorkbenches` 服务，客户端 `apply` 又不允许 pending。
-  v0.1.1 改为：客户端先检查服务是否存在，没有就跳过注册；服务端用 `desktopWorkbenches` 路由前缀判断宿主。
-- 复盘结论已写进 README 的「在纯 Web 形态下」一节。
+- 首屏提示 `dsh-agent-new-media-studio: pending (waiting for service: desktopWorkbenches)`。
+  **这条是预期行为，不是缺陷**（v0.2.0 已纠正认知）：插件在客户端声明了
+  `inject: ['desktopWorkbenches']`，Cordis 会一直挂起等这个服务；纯 `dsh --profile web`
+  没有 Desktop 工作台宿主，所以永远 pending。同一个 Harness 里参考插件
+  `dsh-workbench-personal-social-local` 也是同样的 pending 提示，可以互证。
+  在 Desktop 里 `desktopWorkbenches` 由宿主注入，插件正常激活。
+  v0.1.1 里加的「服务不存在就跳过注册」保留着，作为纯 Web 形态下的防御，不影响 Desktop。
 
 ## 4. 本机测试
 
@@ -80,19 +82,57 @@ npm test   → 6/6 通过
   待办角标 1、柱图出现 +210/-150/+380 等真实差值、审计流两条。
 - 顺手修的：柱图为 0 时被画成满高（今天那根）、`/detail` 用 prefix 路由、`history` 字段 SQL 拼错。
 
-注意：参考实现里的 `repository` 是占位身份，本包没有沿用它；本包身份仍是
-`zhifanluosheng/dsh-ai-native-company`（仓库尚未创建，`npm run check` 会明确失败）。
+注意：参考实现里的 `repository` 是占位身份，本包没有沿用它。
 
-## 9. 尚未实测（必须由 Desktop 内的人完成）
+## 9. 已装进真实 Desktop profile（含证据）
 
-- [ ] 在真实 DSH Desktop 里安装该 `.tgz` → 重启 → 工作台市场「已安装」出现条目 → 左侧切换器能切到本工作台。
-- [ ] `register()` 的仓库身份解析：当前 `package.json` 的 `repository` 是 `zhifanluosheng/dsh-ai-native-company`（尚未创建），宿主会认为「包来源无法归属市场仓库」，本机加载不受影响，但侧栏卡片/市场状态可能显示"来源未确认"。
-- [ ] 工作台会话：`问 CEO` 打开右侧抽屉，`开始工作台会话` 能创建并归属到本工作台的会话，草稿能填进输入框。
-- [ ] 顶部工具栏在紧凑模式下与宿主的拖动区域不冲突（`data-dsh-workbench-toolbar` 已按规范标注）。
-- [ ] 侧栏展开/收起、全屏进出时的布局。
+`dsh plugin --profile web add` 在本机不可用（pnpm store 版本冲突，见下），所以按参考插件 README
+的等价做法手工注册：
 
-## 7. 身份待办
+| 动作 | 位置 |
+| --- | --- |
+| junction 链接 | `%APPDATA%\dsh-desktop\harness\profiles\web\node_modules\dsh-agent-new-media-studio` → 本仓库 |
+| `dependencies` 增加 | `"dsh-agent-new-media-studio": "link:D:/Github/DSH工作台/DOUYIN/自媒体工作台"` |
+| `dsh.profile.bundles` 末尾追加 | `dsh-agent-new-media-studio` |
+| 备份 | `profiles/web/package.json.bak-ans-20261026-125529` |
 
-`package.json` 的 `repository` 与客户端的 `REPOSITORY` 都是
-`https://github.com/zhifanluosheng/dsh-ai-native-company`，但同名仓库还没创建。
-`npm run check` 会明确失败并提示原因，创建仓库后即可通过。
+证据（用同一个 Desktop harness 的 profile 起一次 `dsh --profile web --port 3214`）：
+
+- `window.__DSH_BOOT__` 共 83 条 entry，其中包含 `dsh-agent-new-media-studio`
+  → 宿主确实扫描到了本包的客户端模块并下发到浏览器。
+- 同一页面里本包状态是 `pending (waiting for service: desktopWorkbenches)`，
+  参考插件 `dsh-workbench-personal-social-local` 同样 pending —— 因为 `dsh --profile web`
+  不是 Desktop，没有工作台宿主服务。在 Desktop 里该服务存在，插件会正常激活。
+
+回滚：还原上面那个 `.bak`，并删掉 junction，重启 Desktop 即可。
+
+### 本机 pnpm 存储冲突（既有问题，与本次改动无关）
+
+```
+dsh plugin --profile web add <tgz>
+→ [ERR_PNPM_UNEXPECTED_STORE] dependencies at profiles/web/node_modules are linked from
+  store v10, pnpm now wants store v11
+```
+这是 profile 当初用 pnpm 10 装、而 Desktop 内置 pnpm 11 导致的，所有插件的 CLI 安装都会撞上。
+
+### 顺带发现（不属于本包）
+
+同一个 profile 里有 4 个插件被 harness 跳过：
+`dsh-desic-terminal@0.1.0`、`dsh-toonflow@0.1.0`、`dsh-content-workbench@0.2.1`、`dsh-site-selection@1.2.2`，
+原因都是 peer 依赖写的是 `@deepseek-ai/dsh-host-webserver` 的 `<0.2.0-0` 区间，
+而当前运行时是 `0.2.1-rc.2`。要恢复得给它们 `dsh plugin allow-version` 或升级。
+本包没有声明这类 peer，所以不受影响。
+
+## 10. 尚未实测（必须由 Desktop 内的人完成）
+
+- [ ] 完整退出并重开 DSH Desktop → 左侧顶部工作台切换器里出现「Agent New Media Studio」。
+- [ ] 打开后 6 路 Agent 都渲染出来（空库时应全是灰灯、`待采`、柱图全空）。
+- [ ] `问 CEO` 打开右侧抽屉 → `开始工作台会话` 能创建并归属到本工作台的会话 → 草稿填进输入框。
+- [ ] 顶部工具栏在紧凑模式下与宿主拖动区域不冲突（`data-dsh-workbench-toolbar` 已按规范标注）。
+- [ ] 侧栏展开/收起、全屏进出、窄窗口下的重排。
+
+## 11. 身份已就绪
+
+仓库已创建并推送：`https://github.com/zhifanluosheng/dsh-ai-native-company`（public，main 分支）。
+`package.json`、客户端 `REPOSITORY`、`scripts/verify-package.mjs` 三处身份现在一致，
+`npm run check` 通过。
